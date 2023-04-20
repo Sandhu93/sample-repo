@@ -55,8 +55,15 @@ while True:
 cap.release()
 cv2.destroyAllWindows()
 
+[ERROR:0@1.469] global net_impl.cpp:1161 getLayerShapesRecursively OPENCV/DNN: [Concat]:(concat_20): getMemoryShapes() throws exception. inputs=2 outputs=1/1 blobs=0
+[ERROR:0@1.469] global net_impl.cpp:1167 getLayerShapesRecursively     input[0] = [ 1 128 26 26 ]
+[ERROR:0@1.469] global net_impl.cpp:1167 getLayerShapesRecursively     input[1] = [ 1 256 25 25 ]
+[ERROR:0@1.469] global net_impl.cpp:1171 getLayerShapesRecursively     output[0] = [ 1 128 26 26 ]
+[ERROR:0@1.469] global net_impl.cpp:1177 getLayerShapesRecursively Exception message: OpenCV(4.7.0) /io/opencv/modules/dnn/src/layers/concat_layer.cpp:109: error: (-201:Incorrect size of input array) Inconsistent shape for ConcatLayer in function 'getMemoryShapes'
+
 Traceback (most recent call last):
-  File "/home/pi/Desktop/blind/darknet/blind.py", line 20, in <module>
-    blob = cv2.dnn.blobFromImage(frame, 1/255, (416, 416), swapRB=True, crop=False)
-cv2.error: OpenCV(4.7.0) /io/opencv/modules/imgproc/src/resize.cpp:4062: error: (-215:Assertion failed) !ssize.empty() in function 'resize'
+  File "/home/pi/Desktop/blind/darknet/blind.py", line 26, in <module>
+    outputs = net.forward()
+cv2.error: OpenCV(4.7.0) /io/opencv/modules/dnn/src/layers/concat_layer.cpp:109: error: (-201:Incorrect size of input array) Inconsistent shape for ConcatLayer in function 'getMemoryShapes'
+
 
