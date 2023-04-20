@@ -54,3 +54,9 @@ while True:
 # Clean up
 cap.release()
 cv2.destroyAllWindows()
+
+Traceback (most recent call last):
+  File "/home/pi/Desktop/blind/darknet/blind.py", line 20, in <module>
+    blob = cv2.dnn.blobFromImage(frame, 1/255, (416, 416), swapRB=True, crop=False)
+cv2.error: OpenCV(4.7.0) /io/opencv/modules/imgproc/src/resize.cpp:4062: error: (-215:Assertion failed) !ssize.empty() in function 'resize'
+
