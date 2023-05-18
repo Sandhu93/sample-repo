@@ -1,59 +1,126 @@
 
-CREATE TABLE books (
-  book_id INT(11) NOT NULL AUTO_INCREMENT,
-  title VARCHAR(255) NOT NULL,
-  author VARCHAR(255) NOT NULL,
-  publisher VARCHAR(255) NOT NULL,
-  publish_date DATE NOT NULL,
-  isbn VARCHAR(13) NOT NULL,
-  PRIMARY KEY (book_id)
-);
+import cv2
+import warnings
+import os
+warnings.filterwarnings("ignore")
+import termcolor
 
+# Import the necessary modules for face recognition
+import face_recognition
 
-CREATE TABLE members (
-  member_id INT(11) NOT NULL AUTO_INCREMENT,
-  first_name VARCHAR(50) NOT NULL,
-  last_name VARCHAR(50) NOT NULL,
-  email VARCHAR(255) NOT NULL,
-  address VARCHAR(255) NOT NULL,
-  phone_number VARCHAR(20) NOT NULL,
-  PRIMARY KEY (member_id)
-);
+KNOWN_DISTANCE = 48
+PERSON_WIDTH = 15
+CUP_WIDTH = 3
+KEYBOARD_WIDTH = 4
+MOBILE_WIDTH = 3
+SCISSOR_WIDTH = 3
 
+FONTS = cv2.FONT_HERSHEY_TRIPLEX
 
-CREATE TABLE borrow_history (
-  history_id INT(11) NOT NULL AUTO_INCREMENT,
-  book_id INT(11) NOT NULL,
-  member_id INT(11) NOT NULL,
-  borrow_date DATE NOT NULL,
-  due_date DATE NOT NULL,
-  return_date DATE DEFAULT NULL,
-  PRIMARY KEY (history_id),
-  FOREIGN KEY (book_id) REFERENCES books(book_id),
-  FOREIGN KEY (member_id) REFERENCES members(member_id)
-);
+def detect_object(object):
+    classes, scores, boxes = model.detect(object,0.4,0.3)
+    data_list =[]
+    for (classid, score, box) in zip(classes, scores, boxes):
+        cv2.rectangle(object, box,(0,0,255), 2)
+        cv2.putText(object,"{}:{}".format(class_names[classid],format(score,'.2f')), (box[0], box[1]-14), FONTS,0.6,(0,255,0), 3)
 
+        if classid == 0:  # person
+            data_list.append([class_names[classid], box[2], (box[0], box[1]-2)])
+        elif classid == 41:  # cup
+            data_list.append([class_names[classid], box[2], (box[0], box[1]-2)])
+        elif classid == 66:  # keyboard
+            data_list.append([class_names[classid], box[2], (box[0], box[1]-2)])
+        elif classid == 67:  # cell phone
+            data_list.append([class_names[classid], box[2], (box[0], box[1]-2)])
+        elif classid == 76:  # scissors
+            data_list.append([class_names[classid], box[2], (box[0], box[1]-2)])
+    return data_list
 
-CREATE TABLE covid_vax (
-  id INT(11) NOT NULL AUTO_INCREMENT,
-  name VARCHAR(50) NOT NULL,
-  age INT(11) NOT NULL,
-  gender ENUM('Male', 'Female', 'Other') NOT NULL,
-  occupation VARCHAR(50) NOT NULL,
-  vax_type ENUM('Pfizer', 'Moderna', 'AstraZeneca') NOT NULL,
-  vax_date DATE NOT NULL,
-  PRIMARY KEY (id)
-);
+def cal_distance(f, W, w):
+    return (w * f) / W 
 
+def cal_focalLength(d, W, w):
+    return (W * d) / (w * 2)
 
-CREATE TABLE students (
-  student_id INT(11) NOT NULL AUTO_INCREMENT,
-  first_name VARCHAR(50) NOT NULL,
-  last_name VARCHAR(50) NOT NULL,
-  dob DATE NOT NULL,
-  nationality VARCHAR(50) NOT NULL,
-  program VARCHAR(50) NOT NULL,
-  PRIMARY KEY (student_id)
-);
+class_names = []
+with open("classes.txt", "r") as objects_file:
+    class_names = [e_g.strip() for e_g in objects_file.readlines()]
+
+yoloNet = cv2.dnn.readNet('yolov4-tiny.weights', 'yolov4-tiny.cfg')
+
+model = cv2.dnn_DetectionModel(yoloNet)
+model.setInputParams(size=(416, 416), scale=1/255, swapRB=True)
+
+person_image_path = os.path.join("src", "person.jpg")
+cup_image_path = os.path.join("src", "cup.jpg")
+kb_image_path = os.path.join("src", "keyboard.jpg")
+moblie_image_path = os.path.join("src", "mobile.jpg")
+scissors_image_path = os.path.join("src", "scissors.jpg")
+
+person_data = detect_object(cv2.imread(person_image_path))
+person_width_in_rf = person_data[0][1]
+
+focal_person = cal_focalLength(KNOWN_DISTANCE, PERSON_WIDTH, person_width_in_rf)
+
+# Load the images of the known persons for face recognition
+person1_image = face_recognition.load_image_file("person1.jpg")
+person2_image = face_recognition.load_image_file("person2.jpg")
+person3_image = face_recognition.load_image_file("person3.jpg")
+
+# Encode the face embeddings of the known persons
+person1_encoding = face_recognition.face_encodings(person1_image)[0]
+person2_encoding = face_recognition.face_encodings(person2_image)[0]
+person3_encoding = face_recognition.face_encodings(person3_image)[0]
+
+known_encodings = [person1_encoding, person2_encoding, person3_encoding]
+known_names = ["Person 1", "Person 2", "Person 3"]
+
+try:
+    capture = cv2.VideoCapture(0)
+    while True:
+        _, frame = capture.read()
+
+        data = detect_object(frame) 
+        for d in data:
+            if d[0] == 'person':
+                distance = cal_distance(focal_person, PERSON_WIDTH, d[1])
+                x, y = d[2]
+
+                # Extract the face ROI from the detected person
+                face_roi = frame[y:y+d[1], x:x+d[1]]
+
+                # Convert the face ROI to grayscale for face recognition
+                gray_face_roi = cv2.cvtColor(face_roi, cv2.COLOR_BGR2GRAY)
+
+                # Perform face recognition
+                face_encodings = face_recognition.face_encodings(gray_face_roi)
+                if len(face_encodings) > 0:
+                    face_encoding = face_encodings[0]
+
+                    # Compare the face encoding with the known encodings
+                    matches = face_recognition.compare_faces(known_encodings, face_encoding)
+
+                    # Check if there is a match
+                    if True in matches:
+                        match_index = matches.index(True)
+                        match_name = known_names[match_index]
+                        cv2.putText(frame, match_name, (x, y-20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+
+            cv2.rectangle(frame, (x, y-3), (x+150, y+23), (255, 255, 255), -1)
+            cv2.putText(frame, f"Distance: {format(distance, '.2f')} inches", (x+5, y+13), FONTS, 0.45, (255, 0, 0), 2)
+
+            print("Distance of {} is {} inches".format(d[0], distance))
+
+        cv2.imshow('frame', frame)
+        exit_key_press = cv2.waitKey(1)
+
+        if exit_key_press == ord('q'):
+            break
+
+    capture.release()
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+except cv2.error:
+    termcolor.cprint("Select the WebCam or Camera index properly, in my case it is 2", "red")
 
 
