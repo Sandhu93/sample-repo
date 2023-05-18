@@ -1,12 +1,8 @@
-
 import cv2
 import warnings
 import os
 warnings.filterwarnings("ignore")
 import termcolor
-
-# Import the necessary modules for face recognition
-import face_recognition
 
 KNOWN_DISTANCE = 48
 PERSON_WIDTH = 15
@@ -60,20 +56,45 @@ scissors_image_path = os.path.join("src", "scissors.jpg")
 person_data = detect_object(cv2.imread(person_image_path))
 person_width_in_rf = person_data[0][1]
 
-focal_person = cal_focalLength(KNOWN_DISTANCE, PERSON_WIDTH, person_width_in_rf)
+# Load the pre-trained Haar cascade classifier for face detection
+face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
 # Load the images of the known persons for face recognition
-person1_image = face_recognition.load_image_file("person1.jpg")
-person2_image = face_recognition.load_image_file("person2.jpg")
-person3_image = face_recognition.load_image_file("person3.jpg")
+person1_image = cv2.imread("person1.jpg")
+person2_image = cv2.imread("person2.jpg")
+person3_image = cv2.imread("person3.jpg")
 
-# Encode the face embeddings of the known persons
-person1_encoding = face_recognition.face_encodings(person1_image)[0]
-person2_encoding = face_recognition.face_encodings(person2_image)[0]
-person3_encoding = face_recognition.face_encodings(person3_image)[0]
+# Convert the known person images to grayscale
+person1_gray = cv2.cvtColor(person1_image, cv2.COLOR_BGR2GRAY)
+person2_gray = cv2.cvtColor(person2_image, cv2.COLOR_BGR2GRAY)
+person3_gray = cv2.cvtColor(person3_image, cv2.COLOR_BGR2GRAY)
+
+# Detect faces in the known person images
+person1_faces = face_cascade.detectMultiScale(person1_gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+person2_faces = face_cascade.detectMultiScale(person2_gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+person3_faces = face_cascade.detectMultiScale(person3_gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+
+# Extract the face encodings for the known persons
+person1_encoding = None
+person2_encoding = None
+person3_encoding = None
+
+for (x, y, w, h) in person1_faces:
+    face_roi = person1_gray[y:y+h, x:x+w]
+    person1_encoding = face_roi
+
+for (x, y, w, h) in person2_faces:
+    face_roi = person2_gray[y:y+h, x:x+w]
+    person2_encoding = face_roi
+
+for (x, y, w, h) in person3_faces:
+    face_roi = person3_gray[y:y+h, x:x+w]
+    person3_encoding = face_roi
 
 known_encodings = [person1_encoding, person2_encoding, person3_encoding]
 known_names = ["Person 1", "Person 2", "Person 3"]
+
+focal_person = cal_focalLength(KNOWN_DISTANCE, PERSON_WIDTH, person_width_in_rf)
 
 try:
     capture = cv2.VideoCapture(0)
@@ -92,23 +113,31 @@ try:
                 # Convert the face ROI to grayscale for face recognition
                 gray_face_roi = cv2.cvtColor(face_roi, cv2.COLOR_BGR2GRAY)
 
+                # Detect faces in the face ROI
+                faces = face_cascade.detectMultiScale(gray_face_roi, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+
                 # Perform face recognition
-                face_encodings = face_recognition.face_encodings(gray_face_roi)
-                if len(face_encodings) > 0:
-                    face_encoding = face_encodings[0]
+                if len(faces) > 0:
+                    (fx, fy, fw, fh) = faces[0]
+                    face_encoding = gray_face_roi[fy:fy+fh, fx:fx+fw]
 
                     # Compare the face encoding with the known encodings
-                    matches = face_recognition.compare_faces(known_encodings, face_encoding)
+                    matches = []
+                    for encoding in known_encodings:
+                        if encoding is not None:
+                            result = cv2.matchTemplate(face_encoding, encoding, cv2.TM_CCOEFF_NORMED)
+                            _, similarity = cv2.minMaxLoc(result)
+                            matches.append(similarity)
 
-                    # Check if there is a match
-                    if True in matches:
-                        match_index = matches.index(True)
+                    # Check if a match is found
+                    if len(matches) > 0:
+                        max_similarity = max(matches)
+                        match_index = matches.index(max_similarity)
                         match_name = known_names[match_index]
                         cv2.putText(frame, match_name, (x, y-20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
             cv2.rectangle(frame, (x, y-3), (x+150, y+23), (255, 255, 255), -1)
             cv2.putText(frame, f"Distance: {format(distance, '.2f')} inches", (x+5, y+13), FONTS, 0.45, (255, 0, 0), 2)
-
             print("Distance of {} is {} inches".format(d[0], distance))
 
         cv2.imshow('frame', frame)
@@ -122,5 +151,3 @@ try:
     cv2.destroyAllWindows()
 except cv2.error:
     termcolor.cprint("Select the WebCam or Camera index properly, in my case it is 2", "red")
-
-
